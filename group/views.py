@@ -296,17 +296,17 @@ def msg_reply(request, msg_id):
     content_type = 'application/json; charset=utf-8'
     if request.is_ajax():
         ctx = {}
+        try:
+            group_msg = GroupMessage.objects.get(id=msg_id)
+        except GroupMessage.DoesNotExist:
+            return HttpResponseBadRequest(content_type=content_type)
+
         if request.method == 'POST':
             form = MessageReplyForm(request.POST)
-
             # TODO: invalid form
             if form.is_valid():
                 msg = form.cleaned_data['message']
-                try:
-                    group_msg = GroupMessage.objects.get(id=msg_id)
-                except GroupMessage.DoesNotExist:
-                    return HttpResponseBadRequest(content_type=content_type)
-            
+
                 msg_reply = MessageReply()
                 msg_reply.reply_to = group_msg
                 msg_reply.from_email = request.user.username
@@ -318,22 +318,23 @@ def msg_reply(request, msg_id):
                     grpmsg_reply_added.send(sender=MessageReply,
                                             msg_id=msg_id,
                                             from_email=request.user.username)
-
-                ctx['reply'] = msg_reply
-                html = render_to_string("group/group_reply_new.html", ctx)
+                replies = MessageReply.objects.filter(reply_to=group_msg)
+                r_num = len(replies)
+                if r_num < 4:
+                    ctx['replies'] = replies
+                else:
+                    ctx['replies'] = replies[r_num - 3:]
+                html = render_to_string("group/group_reply_list.html", ctx)
+                serialized_data = json.dumps({"r_num": r_num, "html": html})
+                return HttpResponse(serialized_data, content_type=content_type)
 
         else:
-            try:
-                msg = GroupMessage.objects.get(id=msg_id)
-            except GroupMessage.DoesNotExist:
-                raise HttpResponse(status=400)
-
-            replies = MessageReply.objects.filter(reply_to=msg)
+            replies = MessageReply.objects.filter(reply_to=group_msg)
+            r_num = len(replies)
             ctx['replies'] = replies
             html = render_to_string("group/group_reply_list.html", ctx)
-
-        serialized_data = json.dumps({"html": html})
-        return HttpResponse(serialized_data, content_type=content_type)
+            serialized_data = json.dumps({"r_num": r_num, "html": html})
+            return HttpResponse(serialized_data, content_type=content_type)
     else:
         return HttpResponseBadRequest(content_type=content_type)
 
@@ -929,7 +930,7 @@ def group_discus(request, group_id):
                               from_email=request.user.username)
             # Always return an HttpResponseRedirect after successfully dealing
             # with POST data.
-            return HttpResponseRedirect(reverse('group_info', args=[group_id]))
+            return HttpResponseRedirect(reverse('group_discus', args=[group_id]))
     else:
         form = MessageForm()
         
@@ -1000,6 +1001,11 @@ def group_discus(request, group_id):
     
     for msg in group_msgs:
         msg.reply_cnt = reply_to_list.count(msg.id)
+        msg.replies = []
+        for r in msg_replies:
+            if msg.id == r.reply_to_id:
+                msg.replies.append(r)
+        msg.replies = msg.replies[-3:]
             
         for att in attachments:
             if msg.id == att.group_message_id:

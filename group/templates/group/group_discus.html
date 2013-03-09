@@ -7,8 +7,10 @@
 
 {% block title_panel %}
 
-
 <div class="tabnav">
+    <div class="grp-profile fright">
+        {% grp_avatar group.props.id 24 %}<span class="name">{{ group.group_name }}</span>
+    </div>
     <ul class="tabnav-tabs">
         <li class="tabnav-tab"><a href="{% url 'group_info' group.id %}">{% trans "Libraries" %}</a></li>
         <li class="tabnav-tab tabnav-tab-cur">{% trans "Discussions" %}</li>
@@ -16,11 +18,7 @@
         {% if is_staff %}
         <li class="tabnav-tab"><a href="{% url 'group_manage' group.id %}">{% trans "Admin" %}</a></li>
         {% endif %}
-
     </ul>
-    <div class="fright">
-    {% grp_avatar group.props.id 24 %} <span style="font-size: 16px; font-weight:bold; margin: 0 6px;">{{ group.group_name }}</span>
-    </div>
 </div>
 
 {% endblock %}
@@ -71,11 +69,13 @@
     <div class="w100 ovhd">
         <div class="pic fleft">{% avatar request.user.username 48 %}</div>
         <form id="group-message-form" action="" method="post" class="fright">
-            <textarea name="message" id="message">{{ form.data.message }}</textarea><br />
+            <textarea name="message" id="message" placeholder="{% trans "Add a discusion..." %}">{{ form.data.message }}</textarea><br />
             {% for error in form.message.errors %}
             <p class="error">{{ error|escape }}</p>
             {% endfor %}
-            <input type="submit" value="{% trans "Submit" %}" class="submit" />
+            <input type="submit" value="{% trans "Submit" %}" class="submit hide" />
+            <button type="button" class="cancel hide">{% trans "Cancel" %}</button>
+            <span class="say"></span>
         </form>
     </div>
 
@@ -87,14 +87,16 @@
             <a href="{{ SITE_ROOT }}profile/{{ msg.from_email }}/">{% avatar msg.from_email 48 %}</a>
         </div>
         <div class="txt fright">
-            <div class="msg-hd">
-                <span class="time">{{ msg.timestamp|translate_seahub_time }}</span>
-                <a href="{{ SITE_ROOT }}profile/{{ msg.from_email }}/" title="{{ msg.from_email }}">{{ msg.from_email|email2nickname }}</a>
-            </div>
-            <div class="msg-bd">
-                <p>
+            <div class="msg-main">
+                <div class="msg-hd w100 ovhd">
+                    {% if is_staff or msg.from_email == request.user.username %}
+                    <span class="msg-del op fright vh" data-url="{% url 'group_message_remove' group.id msg.id %}">{% trans "Delete" %}</span>
+                    {% endif %}
+                    <a href="{{ SITE_ROOT }}profile/{{ msg.from_email }}/" title="{{ msg.from_email }}" class="author">{{ msg.from_email|email2nickname }}</a>
+                    <span class="time">{{ msg.timestamp|translate_seahub_time }}</span>
+                </div>
+                <p class="msg-con">
                 {% if msg.attachment.src == 'recommend' %}
-                <!-- recommend -->
                 <span class="recommend">{% trans "Recommended" %}
                   {% if msg.attachment.attach_type == 'file' %}
                   <a href="{% url 'repo_view_file' msg.attachment.repo_id %}?p={{ msg.attachment.path|urlencode }}" target="_blank">
@@ -106,28 +108,39 @@
                 {% endif %}
 
                 {% if msg.attachment.src == 'filecomment' %}
-                <!-- file comment -->
                 <span class="recommend">{% trans "File " %}<a href="{% url 'repo_view_file' msg.attachment.repo_id %}?p={{ msg.attachment.path|urlencode }}&comment_open=true" target="_blank"> {{ msg.attachment.name }}</a> {% trans "has a new comment:"%}</span>
                 {% endif %}
                 
                 {{ msg.message|seahub_urlize|find_at|linebreaksbr }}
                 </p>
-                <button class="reply op" data="{% url 'msg_reply' msg.id %}">
-                    {% if msg.reply_cnt == 0 %}
-                    <span class="reply-cnt"></span>{% trans 'Reply' %}
-                    {% else %}
-                    {% blocktrans count counter=msg.reply_cnt %}
-                    <span class="reply-cnt">{{ counter }}</span> Reply
-                    {% plural %}
-                    <span class="reply-cnt">{{ counter }}</span> Replies
-                    {% endblocktrans %}
-                    {% endif %}
-                </button>
-                <button class="replyclose op hide">{% trans "Hide" %}</button>
-                {% if is_staff or msg.from_email == request.user.username %}
-                <button class="msg-delete op" data="{% url 'group_message_remove' group.id msg.id %}">{% trans "Delete" %}</button>
+                <span class="say"></span>
+            </div>
+            <div class="msg-op">
+                <div class="reply-cnt-op{% if msg.reply_cnt < 4 %} hide{% endif %}" data-rstatus="hide">
+                    <span class="reply-cnt" data-url="{% url 'msg_reply' msg.id %}">{% blocktrans with cnt=msg.reply_cnt %}{{ cnt }} replies{% endblocktrans %}</span>
+                    <span class="hide-reply hide">{% trans "Hide replies" %}</span>
+                </div>
+                {% if msg.reply_cnt == 0 %}
+                <ul class="reply-list hide"></ul>
+                {% else %}
+                <ul class="reply-list">
+                    {% for r in msg.replies %}
+                    <li class="reply w100 ovhd">
+                    <a href="{% url 'user_profile' r.from_email %}" class="pic fleft">{% avatar r.from_email 28 %}</a>
+                    <div class="txt fright">
+                        <a href="{% url 'user_profile' r.from_email %}">{{ r.from_email|email2nickname }}</a>
+                        <span class="time">{{ r.timestamp|translate_seahub_time }}</span>
+                        <span class="reply-at op vh" data="{{ r.from_email|email2nickname }}">{% trans 'Reply' %}</span>
+                        <p class="reply-con">{{ r.message|seahub_urlize|find_at }}</p>
+                    </div>
+                    </li>
+                    {% endfor %}
+                </ul>
                 {% endif %}
-                <div class="reply-bd"></div>
+                <textarea placeholder="{% trans "Add a reply..." %}" name="message" class="reply-input"></textarea>
+                <p class="error hide">{% trans "It can not be blank and should be no more than 150 characters." %}</p>
+                <button type="button" class="reply-submit hide" data-url="{% url 'msg_reply' msg.id %}">{% trans "Submit" %}</button>
+                <button type="button" class="reply-cancel hide">{% trans "Cancel" %}</button>
             </div>
         </div>
         </li>
@@ -179,6 +192,15 @@ $(window).scroll(function() {
 
 addAtAutocomplete('#message', '#group-message-form', {{ group.id }}, "{% url 'group_attention' %}", {'border':'1px solid #ddd', 'width':'600px', 'height': '80px', 'word-wrap':'break-word', 'overflow-y':'auto', 'line-height': '1.5em'}); // remember to add unit (px or em) to line-height, as js in ie will take 1.5 as 1.5, not 1.5em
 
+$('#message').focus(function() {
+    $(this).height(75);
+    $(this).parent().find('.submit, .cancel').removeClass('hide');
+});
+$('#group-message-form .cancel').click(function() {
+    $(this).parent().find('.submit, .cancel').addClass('hide');
+    $('#message').height(25);
+});
+
 $("table tr:gt(0)").hover(
     function() {
         $(this).find('.op-icon').css('cursor', 'pointer').removeClass('vh');
@@ -187,9 +209,124 @@ $("table tr:gt(0)").hover(
         $(this).find('.op-icon').addClass('vh');
     }
 );
+$('.msg-main, .reply').hover(
+    function(){
+        $(this).find('.op').removeClass('vh');
+    },
+    function(){
+        $(this).find('.op').addClass('vh');
+    }
+);
+$('.reply-cnt-op').hover(
+    function() {
+        $(this).children().css({'color':'#080'});
+    },
+    function() {
+        $(this).children().css({'color':'#333'});
+    }
+).click(function() {
+    var cnt_op = $(this); 
+    var r_cnt = cnt_op.children('.reply-cnt'); 
+    var url = r_cnt.data('url');
+    var h_r = cnt_op.children('.hide-reply'); 
+    var p = cnt_op.parent();
+    var r_list = p.find('.reply-list');
 
+    if (cnt_op.data('rstatus') == 'hide') {
+        $.ajax({
+            url: url,
+            dataType: 'json',
+            cache: true,
+            success: function(data) {
+                r_list.html(data['html']);
+                r_cnt.addClass('hide');
+                h_r.removeClass('hide')
+                cnt_op.data('rstatus', 'show').data('cnt', data['r_num']);
+                p.find('.reply').hover(
+                    function() {
+                        $(this).find('.op').removeClass('vh');
+                    },
+                    function(){
+                        $(this).find('.op').addClass('vh');
+                    }
+                );
+                p.find('.reply-at').click(replyAt);
+            }
+        });
+    } else {
+        h_r.addClass('hide'); 
+        r_cnt.removeClass('hide');
+        r_list.html(r_list.children()[cnt_op.data('cnt')-1]);
+        cnt_op.data('rstatus', 'hide');
+    }
+});
+$('.reply-input').focus(function() {
+    $(this).height(50);
+    $(this).parent().find('.reply-submit, .reply-cancel').removeClass('hide');
+});
+$('.reply-cancel').click(function() {
+    var p = $(this).parent();
+    p.find('.reply-submit, .reply-cancel, .error').addClass('hide');
+    p.find('.reply-input').val('').height(20);
+});
+function replyAt() {
+    var r = $(this).parents('.msg-op'); 
+    var r_input = r.find('.reply-input'); 
+    r_input.height(50).val('@' + $(this).attr('data') + ' ');
+    r.find('.reply-submit, .reply-cancel').removeClass('hide');
+    setCaretPos(r_input[0], r_input.val().length);
+    r_input.focus();
+}
+$('.reply-at').click(replyAt);
+$('.reply-submit').click(function() {
+    var p = $(this).parent();
+    var r_input = p.find('.reply-input');
+    var r = $.trim(r_input.val()); 
+    var err = p.find('.error');
+    if (!r || r.length > 150) {
+        err.removeClass('hide');
+        return false;
+    }
 
-{% include 'group/msg_reply_js.html' %}
+    err.addClass('hide');
+    var sm = $(this);
+    var url = sm.data('url');
+    var r_list = p.find('.reply-list');
+    disable(sm);
+    $.ajax({
+        type: "POST",
+        url: url,
+        dataType: 'json',
+        cache: false,
+        contentType: 'application/json; charset=utf-8',
+        beforeSend: prepareCSRFToken,
+        data: "message=" + r,
+        success: function(data) {
+            r_list.html(data['html']).removeClass('hide');
+            if (data['r_num'] > 3) {
+                var r_cnt = p.find('.reply-cnt');
+                r_cnt.html(r_cnt.html().replace(/\d+/, data['r_num']));
+                p.find('.reply-cnt-op').removeClass('hide');
+            }
+            enable(sm);
+            r_input.val('').height(20);
+            p.find('.reply-submit, .reply-cancel').addClass('hide');
+            p.find('.reply').hover(
+                function(){
+                    $(this).find('.op').removeClass('vh');
+                },
+                function(){
+                    $(this).find('.op').addClass('vh');
+                }
+            );
+            p.find('.reply-at').click(replyAt);
+        },
+        error:function() {
+           err.html('{% trans "Failed." %}').removeClass('hide'); 
+           enable(sm);
+        }
+    }); 
+});
 
 var contact_list = [], contact_email;
 {% for contact in contacts %}
@@ -197,16 +334,22 @@ contact_email = '{{ contact.contact_email }}';
 contact_list.push({value:contact_email, label:contact_email});
 {% endfor %}
 
-
-$('.msg-delete').click(function() {
-    var url = $(this).attr('data');
+$('.msg-del').click(function() {
+    var url = $(this).data('url');
     var msg = $(this).parents('.msg');
-    var del_confirm = '<div class="msg-del-confirm hide"><p>{% trans "Really want to delete this message?" %}</p><button class="msg-del-yes">{% trans "Yes" %}</button><button class="msg-del-no">{% trans "No" %}</button></div>';
-    $(this).parent().append(del_confirm).css('position', 'relative');
-    del_confirm = $(this).parent().find('.msg-del-confirm');
-    del_confirm.css({'left':$(this).position().left - 15, 'top':$(this).position().top - del_confirm.outerHeight()}).removeClass('hide');
-    del_confirm.children('.msg-del-yes').click(function() {
-        del_confirm.remove();
+    var cfm;
+    if (msg.find('.msg-del-confirm').length > 0) {
+        cfm = msg.find('.msg-del-confirm');
+    } else {
+        cfm = '<div class="msg-del-confirm hide"><p>{% trans "Really want to delete this message?" %}</p><button class="yes">{% trans "Yes" %}</button><button class="no">{% trans "No" %}</button></div>';
+        var msg_main = msg.find('.msg-main');
+        var msg_hd = msg.find('.msg-hd');
+        cfm = msg_main.append(cfm).children(':last');
+        cfm.css({'right':msg_main.css('padding-right'), 'top':msg_hd.position().top + msg_hd.height()});
+    }
+    cfm.removeClass('hide');
+    cfm.children('.yes').click(function() {
+        cfm.remove();
         $.ajax({
             url: url,
             dataType:'json',
@@ -218,17 +361,15 @@ $('.msg-delete').click(function() {
                     feedback('{% trans "Failed to delete: " %}' + data['err_msg'], 'error');
                 }
             },
-            error: function(jqXHR, textStatus, errorThrown) {
-                feedback(textStatus + '{% trans ", failed to delete." %}', 'error');
+            error: function() {
+                feedback('{% trans "Failed." %}', 'error');
             }
         });
     });
-    del_confirm.children('.msg-del-no').click(function() {
-        del_confirm.remove();
+    cfm.children('.no').click(function() {
+        cfm.remove();
     });
 });
-
-
 
 {% url 'group_members' group.id as member_add_url %}
 {% with post_url=member_add_url %}
